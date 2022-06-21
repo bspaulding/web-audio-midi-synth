@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 
 const styles = {
   keyboard: {
@@ -32,51 +32,105 @@ const notes = {
   B: 35,
 };
 
-export default function MIDIKeyboard({ channel = 1, onEvent }) {
-  const octave = 1;
-  const zeroCNoteNumber = 24;
+function getWrap(xs, i) {
+  return xs[i % xs.length];
+}
 
+function notesInKey(key) {
+  const chromatic = Object.keys(notes);
+  const rootI = chromatic.indexOf(key);
+  return [rootI, 2, 4, 5, 7, 9, 11].map((i) => getWrap(chromatic, i));
+}
+
+function notesToFire(chords, key, rootName, octave) {
+  const rootNumber = notes[rootName] + 12 * octave;
+  if (!chords) {
+    return [rootNumber];
+  }
+  const scale = notesInKey(key);
+  const chordRootI = scale.indexOf(rootName);
+  if (chordRootI < 0) {
+    return [rootNumber];
+  }
+  const thirdNote = notes[getWrap(scale, chordRootI + 2)];
+  const fifthNote = notes[getWrap(scale, chordRootI + 4)];
+  const third = thirdNote + 12 * octave;
+  const fifth = fifthNote + 12 * octave;
+  const chord = [rootNumber, third, fifth];
+  return chord;
+}
+
+function noteIsOn(noteNumbersOn, octave, noteName) {
+  const noteNumber = notes[noteName] + 12 * octave;
+  return noteNumbersOn.indexOf(noteNumber) >= 0;
+}
+
+export default function MIDIKeyboard({
+  channel = 1,
+  octave = 2,
+  onEvent = () => {},
+  chords = false,
+  key = "C",
+}) {
+  const [notesOn, setNotesOn] = useState([]);
   function fireNoteOn(noteName, octave) {
-    onEvent({
-      channel: 1,
-      message: 0x9,
-      description: "NoteOn",
-      noteNumber: notes[noteName] + 12 * octave,
-      noteVelocity: 100,
+    const notes = notesToFire(chords, key, noteName, octave);
+    notes.map((noteNumber) => {
+      onEvent({
+        channel: 1,
+        message: 0x9,
+        description: "NoteOn",
+        noteNumber,
+        noteVelocity: 100,
+      });
     });
+    setNotesOn(notes);
   }
   function fireNoteOff(noteName, octave) {
-    onEvent({
-      channel: 1,
-      message: 0x8,
-      description: "NoteOff",
-      noteNumber: notes[noteName] + 12 * octave,
+    notesToFire(chords, key, noteName, octave).map((noteNumber) => {
+      onEvent({
+        channel: 1,
+        message: 0x8,
+        description: "NoteOff",
+        noteNumber,
+      });
     });
+    setNotesOn([]);
   }
 
   const common = { octave, fireNoteOn, fireNoteOff };
   return (
-    <div style={styles.keyboard}>
-      <Key {...common} noteName="C" />
-      <Key {...common} noteName="Db" />
-      <Key {...common} noteName="D" />
-      <Key {...common} noteName="Eb" />
-      <Key {...common} noteName="E" />
-      <Key {...common} noteName="F" />
-      <Key {...common} noteName="Gb" />
-      <Key {...common} noteName="G" />
-      <Key {...common} noteName="Ab" />
-      <Key {...common} noteName="A" />
-      <Key {...common} noteName="Bb" />
-      <Key {...common} noteName="B" />
-      <Key {...common} noteName="C" octave={octave + 1} />
+    <div>
+      <div style={styles.keyboard}>
+        <Key {...common} noteName="C" on={noteIsOn(notesOn, octave, "C")} />
+        <Key {...common} noteName="Db" on={noteIsOn(notesOn, octave, "Db")} />
+        <Key {...common} noteName="D" on={noteIsOn(notesOn, octave, "D")} />
+        <Key {...common} noteName="Eb" on={noteIsOn(notesOn, octave, "Eb")} />
+        <Key {...common} noteName="E" on={noteIsOn(notesOn, octave, "E")} />
+        <Key {...common} noteName="F" on={noteIsOn(notesOn, octave, "F")} />
+        <Key {...common} noteName="Gb" on={noteIsOn(notesOn, octave, "Gb")} />
+        <Key {...common} noteName="G" on={noteIsOn(notesOn, octave, "G")} />
+        <Key {...common} noteName="Ab" on={noteIsOn(notesOn, octave, "Ab")} />
+        <Key {...common} noteName="A" on={noteIsOn(notesOn, octave, "A")} />
+        <Key {...common} noteName="Bb" on={noteIsOn(notesOn, octave, "Bb")} />
+        <Key {...common} noteName="B" on={noteIsOn(notesOn, octave, "B")} />
+        <Key
+          {...common}
+          noteName="C"
+          octave={octave + 1}
+          on={noteIsOn(notesOn, octave + 1, "C")}
+        />
+      </div>
     </div>
   );
 }
 
-function Key({ noteName, octave, fireNoteOn, fireNoteOff }) {
-  const style =
-    noteName.length === 2 ? { ...styles.key, ...styles.keyBlack } : styles.key;
+function Key({ on = false, noteName, octave, fireNoteOn, fireNoteOff }) {
+  const style = {
+    ...styles.key,
+    ...(noteName.length === 2 ? styles.keyBlack : {}),
+    ...(on ? { backgroundColor: "green" } : {}),
+  };
 
   return (
     <div
